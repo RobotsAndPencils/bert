@@ -1099,8 +1099,8 @@ def validate_flags_or_throw(bert_config):
   tokenization.validate_case_matches_checkpoint(FLAGS.do_lower_case,
                                                 FLAGS.init_checkpoint)
 
-  if not FLAGS.do_train and not FLAGS.do_predict:
-    raise ValueError("At least one of `do_train` or `do_predict` must be True.")
+#  if not FLAGS.do_train and not FLAGS.do_predict:
+#    raise ValueError("At least one of `do_train` or `do_predict` must be True.")
 
   if FLAGS.do_train:
     if not FLAGS.train_file:
@@ -1123,7 +1123,87 @@ def validate_flags_or_throw(bert_config):
         "(%d) + 3" % (FLAGS.max_seq_length, FLAGS.max_query_length))
 
 
+def answer(data):
+    global estimator, tokenizer
+    question = data["question"]
+    passage = data["passage"]
+
+    all_results = []
+
+    def make_train_example(feature):
+        features = collections.OrderedDict()
+        features["unique_ids"] = [feature.unique_id]
+        features["input_ids"] = [feature.input_ids]
+        features["input_mask"] = [feature.input_mask]
+        features["segment_ids"] = [feature.segment_ids]
+
+        return features
+
+    example_doc_tokens = passage.split()
+    example = SquadExample(
+       qas_id="ncc1701",
+       question_text=question,
+       doc_tokens=example_doc_tokens,
+       orig_answer_text="orig_answer_text",
+       start_position=0,
+       end_position=0,
+       is_impossible=False)
+
+    one_example = [example]
+    one_features = []
+
+    def one_append_feature(feature):
+        one_features.append(feature)
+
+    convert_examples_to_features(
+        examples=one_example,
+        tokenizer=tokenizer,
+        max_seq_length=FLAGS.max_seq_length,
+        doc_stride=FLAGS.doc_stride,
+        max_query_length=FLAGS.max_query_length,
+        is_training=False,
+        output_fn=one_append_feature)
+
+    def argmax(items):
+        max_index = 0
+        max_value = items[0]
+        for index, item in enumerate(items):
+            if item > max_value:
+                max_index = index
+        return max_index
+
+    train_examples = [make_train_example(feature) for feature in one_features]
+
+    def generator():
+        for el in train_examples:
+            yield el
+
+    shape256 = tf.TensorShape([None, 256])
+    shape0 = tf.TensorShape([None])
+    def predict_input_fn(params):
+        dataset = tf.data.Dataset.from_generator(
+             generator, {'input_ids': tf.int32, 'input_mask': tf.int32, 'segment_ids': tf.int32, 'unique_ids': tf.int32}, output_shapes={'input_ids': shape256, 'input_mask': shape256, 'segment_ids': shape256, 'unique_ids': shape0} )
+        return dataset
+
+    last_result = ""
+    for result in estimator.predict(
+        predict_input_fn, yield_single_examples=True):
+        start_logits = [float(x) for x in result["start_logits"].flat]
+        end_logits = [float(x) for x in result["end_logits"].flat]
+        start_indexes = _get_best_indexes(start_logits, FLAGS.n_best_size)
+        end_indexes = _get_best_indexes(end_logits, FLAGS.n_best_size)
+
+        start_index = argmax(start_logits)
+        end_index = argmax(end_logits) + 1
+        last_result = " ".join(one_features[0].tokens[start_index:end_index])
+
+    return {
+        "selection": last_result
+    }
+
+
 def main(_):
+  global estimator, tokenizer
   tf.logging.set_verbosity(tf.logging.INFO)
 
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
