@@ -1193,10 +1193,15 @@ def answer(data):
 
     start_index = argmax(start_logits)
     end_index = argmax(end_logits) + 1
-    last_result = " ".join(features[0].tokens[start_index:end_index])
+    orig_tokens = features[0].tokens[start_index:end_index]
+    tok_text = " ".join(orig_tokens)
+    tok_text = tok_text.replace(" ##", "")
+    tok_text = tok_text.replace("##", "")
+    tok_text = tok_text.strip()
+    tok_text = " ".join(tok_text.split())
 
     return {
-        "selection": last_result
+        "selection": tok_text
     }
 
 
