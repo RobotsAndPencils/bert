@@ -33,7 +33,7 @@ def setup():
     print("BERT initialized.")
 
 
-@app.route("/bert", methods=["POST"])
+@app.route("/predict", methods=["POST"])
 def bert():
     data = json.loads(request.data)
     result = run_squad.answer(data)
