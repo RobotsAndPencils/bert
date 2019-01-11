@@ -1201,7 +1201,7 @@ def answer(data):
     tok_text = " ".join(tok_text.split())
 
     return {
-        "selection": tok_text
+        "best_span_str": tok_text
     }
 
 
