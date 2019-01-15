@@ -1158,7 +1158,7 @@ def answer(data):
     #which seems to be a stemmer: 'token', '##izer'
     #example_doc_tokens = tokenizer.tokenize(passage)
     example = SquadExample(
-       qas_id="ncc1701",
+       qas_id="qas_id",
        question_text=question,
        doc_tokens=example_doc_tokens,
        orig_answer_text="orig_answer_text",
@@ -1168,8 +1168,8 @@ def answer(data):
     )
 
     examples = [example]
-    features = []
 
+    features = []
     def append_feature(feature):
         features.append(feature)
 
@@ -1183,26 +1183,98 @@ def answer(data):
         output_fn=append_feature)
 
     feature_dicts = [make_squad_feature_dict(feature) for feature in features]
-
     feature = feature_dicts[0]
-    result = predictor(feature)
-    start_logits = [float(x) for x in result["start_logits"].flat]
-    end_logits = [float(x) for x in result["end_logits"].flat]
-    start_indexes = _get_best_indexes(start_logits, FLAGS.n_best_size)
-    end_indexes = _get_best_indexes(end_logits, FLAGS.n_best_size)
 
-    start_index = argmax(start_logits)
-    end_index = argmax(end_logits) + 1
-    orig_tokens = features[0].tokens[start_index:end_index]
-    tok_text = " ".join(orig_tokens)
+    result = predictor(feature)
+
+    raw_feature = features[0]
+    raw_result = RawResult(
+              unique_id="notused",
+              start_logits=result["start_logits"].flat,
+              end_logits=result["end_logits"].flat)
+
+    tok_text = get_best_span(example, raw_feature, raw_result)
+
+    return {
+        "best_span_str": tok_text
+    }
+
+
+def get_best_span(example, feature, result):
+    do_lower_case=FLAGS.do_lower_case
+
+    feature_index = 0
+    prelim_predictions = []
+    n_best_size = FLAGS.n_best_size
+    max_answer_length = FLAGS.max_answer_length
+    start_logits = result.start_logits
+    end_logits = result.end_logits
+    start_indexes = _get_best_indexes(start_logits, n_best_size)
+    end_indexes = _get_best_indexes(end_logits, n_best_size)
+    # if we could have irrelevant answers, get the min score of irrelevant
+    if FLAGS.version_2_with_negative:
+        feature_null_score = start_logits[0] + end_logits[0]
+        if feature_null_score < score_null:
+          score_null = feature_null_score
+          min_null_feature_index = feature_index
+          null_start_logit = start_logits[0]
+          null_end_logit = end_logits[0]
+    for start_index in start_indexes:
+        for end_index in end_indexes:
+          # We could hypothetically create invalid predictions, e.g., predict
+          # that the start of the span is in the question. We throw out all
+          # invalid predictions.
+          if start_index >= len(feature.tokens):
+            continue
+          if end_index >= len(feature.tokens):
+            continue
+          if start_index not in feature.token_to_orig_map:
+            continue
+          if end_index not in feature.token_to_orig_map:
+            continue
+          if not feature.token_is_max_context.get(start_index, False):
+            continue
+          if end_index < start_index:
+            continue
+          length = end_index - start_index + 1
+          if length > max_answer_length:
+            continue
+
+          prelim_predictions.append({
+              "start_index":start_index,
+              "end_index":end_index,
+              "start_logit":start_logits[start_index],
+              "end_logit":end_logits[end_index]
+          })
+
+    final_text = ""
+    prelim_predictions = sorted(
+        prelim_predictions,
+        key=lambda x: (x["start_logit"] + x["end_logit"]),
+        reverse=True)
+
+    pred = prelim_predictions[0]
+    tok_tokens = feature.tokens[pred["start_index"]:(pred["end_index"] + 1)]
+    orig_doc_start = feature.token_to_orig_map[pred["start_index"]]
+    orig_doc_end = feature.token_to_orig_map[pred["end_index"]]
+    orig_tokens = example.doc_tokens[orig_doc_start:(orig_doc_end + 1)]
+    tok_text = " ".join(tok_tokens)
+
+    # Clean whitespace
+    tok_text = tok_text.strip()
+    tok_text = " ".join(tok_text.split())
+    orig_text = " ".join(orig_tokens)
+
+    final_text = get_final_text(tok_text, orig_text, do_lower_case)
+
+    tok_text = final_text
+    # De-tokenize WordPieces that have been split off.
     tok_text = tok_text.replace(" ##", "")
     tok_text = tok_text.replace("##", "")
     tok_text = tok_text.strip()
     tok_text = " ".join(tok_text.split())
 
-    return {
-        "best_span_str": tok_text
-    }
+    return tok_text
 
 
 def main(_):
