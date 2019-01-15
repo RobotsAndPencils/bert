@@ -36,7 +36,7 @@ def setup():
     FLAGS.num_train_epochs=2.0
     FLAGS.max_seq_length=256
     FLAGS.doc_stride=128
-    FLAGS.do_predict = True
+    FLAGS.do_predict = False
     tf.flags.FLAGS.do_train = False
     run_squad.main(None)
     print("BERT Initialized.")

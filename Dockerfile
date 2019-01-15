@@ -14,10 +14,10 @@ RUN curl -O https://storage.googleapis.com/bert_models/2018_10_18/uncased_L-12_H
 RUN unzip uncased_L-12_H-768_A-12.zip
 RUN rm uncased_L-12_H-768_A-12.zip
 
-#RUN curl -O https://s3-us-west-2.amazonaws.com/elasticallen/squad1_base.tar.gz
-RUN curl -O https://s3-us-west-2.amazonaws.com/elasticallen/squad2_base.tar.gz
-RUN tar xf squad2_base.tar.gz
-RUN rm squad2_base.tar.gz
+RUN curl -O https://s3-us-west-2.amazonaws.com/elasticallen/squad1_base.tar.gz
+#RUN curl -O https://s3-us-west-2.amazonaws.com/elasticallen/squad2_base.tar.gz
+RUN tar xf squad1_base.tar.gz
+RUN rm squad1_base.tar.gz
 
 ##Optimize this later
 ADD . $BERT_HOME/
