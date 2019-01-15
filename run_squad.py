@@ -1204,6 +1204,7 @@ def get_best_span(example, feature, result):
     do_lower_case=FLAGS.do_lower_case
 
     feature_index = 0
+    score_null = 1000000  # large and positive
     prelim_predictions = []
     n_best_size = FLAGS.n_best_size
     max_answer_length = FLAGS.max_answer_length
